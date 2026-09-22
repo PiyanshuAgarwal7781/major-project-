@@ -21,12 +21,20 @@ class Config:
     # ------------------------------------------------------------------ #
     # Combined Dataset A + B (used for training and validation)
     train_root: str = "./data/train"
+
     # Independent Dataset C (used only for final testing)
     test_root: str = "./data/test"
+
+    # 4-class ocular disease classification
     class_names: List[str] = field(default_factory=lambda: [
-        "Glaucoma", "Cataracts", "Diabetic_Retinopathy", "AMD", "Normal"
+        "Glaucoma",
+        "Cataracts",
+        "Diabetic_Retinopathy",
+        "Normal"
     ])
-    num_classes: int = 5
+
+    num_classes: int = 4
+
     image_size: int = 300                     # EfficientNet-B3 native res
     val_split: float = 0.15
     num_workers: int = 4
