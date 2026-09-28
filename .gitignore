@@ -1,5 +1,5 @@
 venv/ 
-data/ 
+
 checkpoints/ 
 outputs/ 
 kaggle_download/ 
