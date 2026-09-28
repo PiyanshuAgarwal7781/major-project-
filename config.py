@@ -7,11 +7,16 @@ Keeping every hyperparameter, path, and architectural constant in one place
 means the training script, the model, and the paper-section generator all
 read from a single source of truth -- important for reproducibility when
 this project gets written up for the IEEE submission.
+
+REVISED: adds `norm_mean` / `norm_std` (auto-loaded from
+`outputs/dataset_stats.json` if `compute_dataset_stats.py` has been run)
+and a `use_lab_clahe` toggle, matching the preprocessing.py rewrite.
 """
 
+import json
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -45,6 +50,19 @@ class Config:
     # ------------------------------------------------------------------ #
     clahe_clip_limit: float = 2.0
     clahe_tile_grid_size: tuple = (8, 8)
+
+    # Use color-preserving LAB-space CLAHE (recommended) instead of the
+    # legacy green-channel-only approach. Set False only to reproduce the
+    # old pipeline for an ablation comparison.
+    use_lab_clahe: bool = True
+
+    # Per-dataset normalization stats. Left as None here -- populated
+    # automatically in __post_init__ from `stats_path` if that file
+    # exists (generate it by running compute_dataset_stats.py once).
+    # Falls back to ImageNet stats with a warning if absent.
+    norm_mean: Optional[List[float]] = None
+    norm_std: Optional[List[float]] = None
+    stats_path: str = "./outputs/dataset_stats.json"
 
     # ------------------------------------------------------------------ #
     # Model (Section 3)
@@ -94,6 +112,18 @@ class Config:
     def __post_init__(self):
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Auto-load computed normalization stats if they've been
+        # generated. If you change train_root's contents (e.g. swap the
+        # cataract source, as you just did) and haven't re-run
+        # compute_dataset_stats.py yet, this silently keeps using the
+        # old stats file until you do -- re-run it after any dataset
+        # change so normalization matches the actual data.
+        if self.norm_mean is None and os.path.exists(self.stats_path):
+            with open(self.stats_path, "r") as f:
+                stats = json.load(f)
+            self.norm_mean = stats["mean"]
+            self.norm_std = stats["std"]
 
 
 CFG = Config()
