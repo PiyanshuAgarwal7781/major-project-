@@ -1,1 +1,9 @@
-venv/  
+venv/ 
+data/ 
+checkpoints/ 
+outputs/ 
+kaggle_download/ 
+__pycache__/ 
+*.pyc 
+*.pth 
+*.pt 
