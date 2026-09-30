@@ -11,6 +11,10 @@ this project gets written up for the IEEE submission.
 REVISED: adds `norm_mean` / `norm_std` (auto-loaded from
 `outputs/dataset_stats.json` if `compute_dataset_stats.py` has been run)
 and a `use_lab_clahe` toggle, matching the preprocessing.py rewrite.
+
+REVISED (split): adds `splits_dir`, `split_val_frac`, `split_test_frac`,
+`split_hash_threshold`. The merged dataset in `train_root` is now split
+into train/val/test by `split_dataset.py` (CSV manifests in `splits_dir`).
 """
 
 import json
@@ -24,11 +28,25 @@ class Config:
     # ------------------------------------------------------------------ #
     # Data
     # ------------------------------------------------------------------ #
-    # Combined Dataset A + B (used for training and validation)
+    # Merged Dataset A + B. This is the SOURCE that gets split into
+    # train / val / test by split_dataset.py.
     train_root: str = "./data/train"
 
-    # Independent Dataset C (used only for final testing)
+    # Old independent Dataset C folder. NOT used by the current
+    # train/val/test pipeline (kept only so old scripts don't break).
     test_root: str = "./data/test"
+
+    # Where split_dataset.py writes train.csv / val.csv / test.csv
+    splits_dir: str = "./data/splits"
+
+    # Split ratios: 80% train / 10% val / 10% test
+    split_val_frac: float = 0.10
+    split_test_frac: float = 0.10
+
+    # Max hamming distance (out of 256 bits) for two images to be treated
+    # as near-duplicates and kept in the same split. Lower it if
+    # split_dataset.py reports a huge "largest group".
+    split_hash_threshold: int = 12
 
     # 4-class ocular disease classification
     class_names: List[str] = field(default_factory=lambda: [
@@ -41,7 +59,7 @@ class Config:
     num_classes: int = 4
 
     image_size: int = 300                     # EfficientNet-B3 native res
-    val_split: float = 0.15
+    val_split: float = 0.15                   # legacy; unused now (see split_val_frac)
     num_workers: int = 4
     batch_size: int = 16
 

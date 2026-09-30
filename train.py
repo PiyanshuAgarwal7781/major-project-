@@ -4,11 +4,18 @@ train.py
 Main entry point: wires together preprocessing, dataset, model, loss,
 optimizer/scheduler, checkpointing, and post-training evaluation/XAI.
 
+Run `python split_dataset.py` ONCE first to create data/splits/{train,val,test}.csv.
+
 Usage:
-    python train.py --data_root /path/to/data --epochs 100
+    python train.py --epochs 30
 
 Re-running the exact same command after an interruption will auto-resume
 from `checkpoints/latest_checkpoint.pth` (Section 5).
+
+Data protocol:
+    train -> weight updates
+    val   -> per-epoch monitoring + best-checkpoint selection
+    test  -> touched ONLY once, after training, for the final report
 """
 
 import argparse
@@ -22,7 +29,7 @@ from torch.utils.data import DataLoader
 
 from config import CFG
 from checkpoint import CheckpointManager
-from dataset import make_subsets, compute_class_weights, RetinalFundusDataset
+from dataset import make_subsets_from_manifest, compute_class_weights
 from losses import build_criterion
 from metrics import full_evaluation_report
 from model import build_model
@@ -41,7 +48,7 @@ def set_seed(seed: int):
 def parse_args():
     parser = argparse.ArgumentParser(description="Train Retinal-SwinNet")
     parser.add_argument("--train_root", type=str, default=CFG.train_root)
-    parser.add_argument("--test_root", type=str, default=CFG.test_root)
+    parser.add_argument("--splits_dir", type=str, default=CFG.splits_dir)
     parser.add_argument("--epochs", type=int, default=CFG.num_epochs)
     parser.add_argument("--batch_size", type=int, default=CFG.batch_size)
     parser.add_argument("--swin_variant", type=str, default=CFG.swin_backbone_name,
@@ -86,17 +93,15 @@ def main():
     print(f"[Setup] Using device: {device}")
 
     # ------------------------------------------------------------------ #
-    # Data
+    # Data  (train / val / test from data/splits/*.csv)
     # ------------------------------------------------------------------ #
     train_tf, eval_tf = build_transforms(CFG)
-    train_set, val_set, test_set = make_subsets(
+    train_set, val_set, test_set = make_subsets_from_manifest(
         train_root=args.train_root,
-        test_root=args.test_root,
+        splits_dir=args.splits_dir,
         class_names=CFG.class_names,
         train_transform=train_tf,
         eval_transform=eval_tf,
-        val_split=CFG.val_split,
-        seed=CFG.seed,
     )
     print(f"[Data] train={len(train_set)}  val={len(val_set)}  test={len(test_set)}")
 
@@ -104,12 +109,12 @@ def main():
                                num_workers=CFG.num_workers, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False,
                              num_workers=CFG.num_workers, pin_memory=True)
+    # Test loader is only used after training finishes.
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                               num_workers=CFG.num_workers, pin_memory=True)
 
-    # Class weights computed on the *training* file list only (avoids leakage).
-    train_file_dataset = RetinalFundusDataset(args.train_root, CFG.class_names, transform=None)
-    class_weights = compute_class_weights(train_file_dataset, CFG.num_classes)
+    # Class weights computed on the *training split* only (avoids leakage).
+    class_weights = compute_class_weights(train_set, CFG.num_classes)
     print(f"[Data] class weights (inverse frequency): {class_weights.tolist()}")
 
     # ------------------------------------------------------------------ #
@@ -174,7 +179,7 @@ def main():
             print(f"  -> New best val acc: {best_val_acc*100:.2f}% (best_model.pth updated)")
 
     # ------------------------------------------------------------------ #
-    # Final evaluation on held-out test set, using the best checkpoint
+    # Final evaluation on held-out test split, using the best checkpoint
     # ------------------------------------------------------------------ #
     print("\n[Eval] Loading best checkpoint for final test-set evaluation...")
     ckpt_manager.load_best(model, map_location=device)

@@ -1,7 +1,5 @@
 venv/ 
-
 checkpoints/ 
-outputs/ 
 kaggle_download/ 
 __pycache__/ 
 *.pyc 
